@@ -4,6 +4,8 @@ Windows app that visualizes a MIDI file in piano roll format. I use this app to 
 
 The code compiles cleanly in Visual Studio 2012 and probably later versions too.
 
+![image](https://repository-images.githubusercontent.com/1054157060/ebb376d6-3844-4dae-ae45-53076765ea0f)
+
 # Links
 
 * [Chris Korda software](https://victimofleisure.github.io/software)
