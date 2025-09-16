@@ -517,12 +517,12 @@ LRESULT CMidiRollView::OnDrawD2D(WPARAM wParam, LPARAM lParam)
 		const CMidiRollDoc::CNoteEvent	note = pDoc->m_arrNote[iNote];
 		double	x1 = note.m_nStartTime * m_ptZoom.x - m_ptScrollPos.x;
 		double	x2 = x1 + note.m_nDuration * m_ptZoom.x;
-		double	y2 = (m_nNoteSpan - (MIDI_P1(note.m_nCmd) - pDoc->m_nLowNote)) * fKeyHeight - m_ptScrollPos.y;
+		double	y2 = (m_nNoteSpan - (MIDI_P1(note.m_nMsg) - pDoc->m_nLowNote)) * fKeyHeight - m_ptScrollPos.y;
 		double	y1 = y2 - fKeyHeight;
 		if (x2 < 0 || y2 < 0 || x1 > m_szView.width || y1 > m_szView.height) {
 			continue;	// cull
 		}
-		int	iChan = MIDI_CHAN(note.m_nCmd);
+		int	iChan = MIDI_CHAN(note.m_nMsg);
 #if REMAP_CHANNELS
 		if (iChan < _countof(m_arrChanMap)) {
 			iChan = m_arrChanMap[iChan];
@@ -814,7 +814,7 @@ int CMidiRollView::FindNote(DPoint ptDip) const
 		for (int iNote = nNotes - 1; iNote >= 0; iNote--) {
 			const CMidiRollDoc::CNoteEvent	note = pDoc->m_arrNote[iNote];
 			if (nTime >= note.m_nStartTime && nTime < note.m_nStartTime + note.m_nDuration 
-			&& MIDI_P1(note.m_nCmd) == iTargetNote) {
+			&& MIDI_P1(note.m_nMsg) == iTargetNote) {
 				return iNote;
 			}
 		}
@@ -835,9 +835,9 @@ void CMidiRollView::OnLButtonDown(UINT nFlags, CPoint point)
 		pDoc->ConvertDurationToString(note.m_nDuration, sDuration);
 		sText.Format(_T("%s ch%d %s %d %s\n"),
 			sStartTime,
-			MIDI_CHAN(note.m_nCmd) + 1, 
-			CNote(MIDI_P1(note.m_nCmd)).MidiName(),
-			MIDI_P2(note.m_nCmd),
+			MIDI_CHAN(note.m_nMsg) + 1, 
+			CNote(MIDI_P1(note.m_nMsg)).MidiName(),
+			MIDI_P2(note.m_nMsg),
 			sDuration);
 		if (nFlags & MK_CONTROL) {
 			SetNow(note.m_nStartTime);
