@@ -20,7 +20,7 @@
 #endif
 
 #include "resource.h"       // main symbols
-
+#include "WinAppCK.h"       // main symbols
 
 // CMidiRollApp:
 // See MidiRoll.cpp for the implementation of this class
@@ -28,7 +28,7 @@
 
 class CMainFrame;
 
-class CMidiRollApp : public CWinAppEx
+class CMidiRollApp : public CWinAppCK
 {
 public:
 	CMidiRollApp();

@@ -55,7 +55,7 @@ public:
 	public:
 		int		m_nStartTime;	// ticks
 		int		m_nDuration;	// ticks
-		DWORD	m_nCmd;	// MIDI command
+		DWORD	m_nMsg;			// MIDI message
 		bool operator<(const CNoteEvent& note) const {
 			return m_nStartTime < note.m_nStartTime;
 		}
@@ -71,6 +71,8 @@ public:
 	double	m_fTempo;		// BPM
 	int		m_nLowNote;		// MIDI note
 	int		m_nHighNote;	// MIDI note
+	int		m_nLowVelo;		// MIDI velocity
+	int		m_nHighVelo;	// MIDI velocity
 	int		m_nEndTime;		// ticks
 	int		m_nTimeDiv;		// ticks per quarter note
 	int		m_nMeter;

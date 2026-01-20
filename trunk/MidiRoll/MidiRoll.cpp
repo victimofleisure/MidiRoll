@@ -31,11 +31,11 @@
 
 // CMidiRollApp
 
-BEGIN_MESSAGE_MAP(CMidiRollApp, CWinAppEx)
+BEGIN_MESSAGE_MAP(CMidiRollApp, CWinAppCK)
 	ON_COMMAND(ID_APP_ABOUT, &CMidiRollApp::OnAppAbout)
 	// Standard file based document commands
-	ON_COMMAND(ID_FILE_NEW, &CWinAppEx::OnFileNew)
-	ON_COMMAND(ID_FILE_OPEN, &CWinAppEx::OnFileOpen)
+	ON_COMMAND(ID_FILE_NEW, &CWinAppCK::OnFileNew)
+	ON_COMMAND(ID_FILE_OPEN, &CWinAppCK::OnFileOpen)
 END_MESSAGE_MAP()
 
 
@@ -72,7 +72,7 @@ BOOL CMidiRollApp::InitInstance()
 	InitCtrls.dwICC = ICC_WIN95_CLASSES;
 	InitCommonControlsEx(&InitCtrls);
 
-	CWinAppEx::InitInstance();
+	CWinAppCK::InitInstance();
 #ifdef _DEBUG
 	Win32Console::Create();
 #endif
@@ -147,7 +147,7 @@ int CMidiRollApp::ExitInstance()
 	//TODO: handle additional resources you may have added
 	AfxOleTerm(FALSE);
 
-	return CWinAppEx::ExitInstance();
+	return CWinAppCK::ExitInstance();
 }
 
 // CMidiRollApp message handlers

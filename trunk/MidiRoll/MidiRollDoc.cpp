@@ -18,9 +18,8 @@
 #include "MidiRoll.h"
 #include "MidiRollDoc.h"
 
-#include <propkey.h>
-
 #include "Midi.h"
+#include "PathStr.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -39,6 +38,8 @@ CMidiRollDoc::CMidiRollDoc()
 	m_fTempo = 0;
 	m_nLowNote = 0;
 	m_nHighNote = 0;
+	m_nLowVelo = 0;
+	m_nHighVelo = 0;
 	m_nEndTime = 0;
 	m_nTimeDiv = 0;
 	m_nMeter = 0;
@@ -71,9 +72,12 @@ bool CMidiRollDoc::ReadMidiNotes(LPCTSTR pszMidiPath)
 	mf.ReadTracks(arrTrack, arrTrackName, nPPQ, &nTempo, &m_sigTime, &m_sigKey, &m_arrTempo);
 	m_nTimeDiv = nPPQ;
 	m_fTempo = double(CMidiFile::MICROS_PER_MINUTE) / nTempo;
+	m_nMeter = m_sigTime.Numerator;
 	m_arrNote.RemoveAll();
 	m_nLowNote = MIDI_NOTE_MAX;
 	m_nHighNote = 0;
+	m_nLowVelo = MIDI_NOTE_MAX;
+	m_nHighVelo = 0;
 	m_nEndTime = 0;
 	enum {
 		ET_OVERLAP,
@@ -98,17 +102,21 @@ bool CMidiRollDoc::ReadMidiNotes(LPCTSTR pszMidiPath)
 	for (int iTrack = 1; iTrack < nTracks; iTrack++) {
 		const CMidiFile::CMidiEventArray	arrEvt = arrTrack[iTrack];
 		int	nEvts = arrEvt.GetSize();
+//		printf("track %d: %d events\n", iTrack, nEvts);
 		int	arrNoteStart[MIDI_NOTES] = {0};
 		BYTE	arrNoteVel[MIDI_NOTES] = {0};
 		int	nCurTime = 0;
 		for (int iEvt = 0; iEvt < nEvts; iEvt++) {
-			DWORD	nCmd = arrEvt[iEvt].Msg;
+			DWORD	nMsg = arrEvt[iEvt].Msg;
 			DWORD	nDeltaT = arrEvt[iEvt].DeltaT;
 			nCurTime += nDeltaT;
-			if (MIDI_CMD(nCmd) == NOTE_ON) {
-				int	iNote = MIDI_P1(nCmd);
-				int	nVel = MIDI_P2(nCmd);
-				bool	bNoteOn = nVel != 0;
+//			printf("%d %d %d %d %d\n", nCurTime, MIDI_CMD_IDX(nMsg), MIDI_CHAN(nMsg), MIDI_P1(nMsg), MIDI_P2(nMsg));
+			BYTE	nCmd = MIDI_CMD(nMsg);
+			if (nCmd == NOTE_ON || nCmd == NOTE_OFF) {
+				int	iNote = MIDI_P1(nMsg);
+				int	nVel = MIDI_P2(nMsg);
+				bool	bNoteOn = (nCmd == NOTE_ON && nVel != 0);
+				bool	bSaveNoteOn = bNoteOn;
 				int	nErrType = -1;
 				if (bNoteOn) {	// if note on event
 					if (arrNoteStart[iNote]) {	// if note is active
@@ -122,7 +130,7 @@ bool CMidiRollDoc::ReadMidiNotes(LPCTSTR pszMidiPath)
 					}
 				}
 				if (nErrType >= 0) {	// if error occurred
-					ERROR_INFO	info = {nCurTime, nErrType, MIDI_CHAN(nCmd), iNote};
+					ERROR_INFO	info = {nCurTime, nErrType, MIDI_CHAN(nMsg), iNote};
 					arrError.Add(info);	// log error
 					nErrors[nErrType]++;	// bump error type count
 				}
@@ -133,7 +141,7 @@ bool CMidiRollDoc::ReadMidiNotes(LPCTSTR pszMidiPath)
 					CNoteEvent	note;
 					note.m_nStartTime = nStartTime;
 					note.m_nDuration = nDuration;
-					note.m_nCmd = nCmd | (nStartVel << 16);
+					note.m_nMsg = nMsg | (nStartVel << 16);
 					m_arrNote.Add(note);
 					if (iNote < m_nLowNote) {
 						m_nLowNote = iNote;
@@ -148,9 +156,15 @@ bool CMidiRollDoc::ReadMidiNotes(LPCTSTR pszMidiPath)
 						m_nEndTime = nEndTime;
 					}
 				}
-				if (nVel != 0) {	// if note on event
+				if (bSaveNoteOn) {	// if note on event
 					arrNoteStart[iNote] = nCurTime + 1;
 					arrNoteVel[iNote] = nVel;
+					if (nVel < m_nLowVelo) {
+						m_nLowVelo = nVel;
+					}
+					if (nVel > m_nHighVelo) {
+						m_nHighVelo = nVel;
+					}
 				}
 			}
 		}
@@ -162,29 +176,39 @@ bool CMidiRollDoc::ReadMidiNotes(LPCTSTR pszMidiPath)
 			}
 		}
 	}
+	m_arrNote.Sort();	// sort notes by start position
 	if (arrError.GetSize()) {	// if errors occurred
+		TRY {
+			CPathStr	sPath;
+			if (theApp.GetAppDataFolder(sPath) && theApp.CreateFolder(sPath)) {
+				sPath.Append(_T("MidiErrs.log"));
+				CStdioFile	fOut(sPath, CFile::modeCreate | CFile::modeWrite);	// open log file
+				fOut.WriteString(CString(pszMidiPath) + '\n');
+				fOut.WriteString(_T("Pos\tChan\tNote\tError\n"));	// write header
+				for (int iErr = 0; iErr < arrError.GetSize(); iErr++) {	// for each error
+					const ERROR_INFO& info = arrError[iErr];
+					CString	sText;
+					sText.Format(_T("%d\t%d\t%d\t"), info.nPos, info.nChan + 1, info.nNote);
+					fOut.WriteString(sText + CString(arrErrorName[info.nType]) + '\n');
+				}
+			}
+		}
+		CATCH (CException, e) {
+			e->ReportError();
+		}
+		END_CATCH
 		CString	sMsg;
 		sMsg.Format(_T("%d note overlaps\n%d spurious offs\n%d hanging notes"),
 			nErrors[ET_OVERLAP], nErrors[ET_SPURIOUS], nErrors[ET_HANGING]);
 		AfxMessageBox(sMsg + _T("\n\nSee MidiErrs.log for details."));	// display error message
-		CStdioFile	fOut(_T("MidiErrs.log"), CFile::modeCreate | CFile::modeWrite);	// open log file
-		fOut.WriteString(_T("Pos\tChan\tNote\tError\n"));	// write header
-		for (int iErr = 0; iErr < arrError.GetSize(); iErr++) {	// for each error
-			const ERROR_INFO& info = arrError[iErr];
-			CString	sText;
-			sText.Format(_T("%d\t%d\t%d\t"), info.nPos, info.nChan + 1, info.nNote);
-			fOut.WriteString(sText + CString(arrErrorName[info.nType]) + '\n');
-		}
 	}
-	m_arrNote.Sort();	// sort notes by start position
 #if 0
 	for (int iNote = 0; iNote < m_arrNote.GetSize(); iNote++) {
 		const CNoteEvent& note = m_arrNote[iNote];
 		printf("%d\t%d\t%d\t%d\t%d\t%d\n", iNote, note.m_nStartTime, note.m_nDuration,
-			MIDI_CHAN(note.m_nCmd), MIDI_P1(note.m_nCmd), MIDI_P2(note.m_nCmd));
+			MIDI_CHAN(note.m_nMsg), MIDI_P1(note.m_nMsg), MIDI_P2(note.m_nMsg));
 	}
 #endif
-	m_nMeter = m_sigTime.Numerator;
 	return true;
 }
 

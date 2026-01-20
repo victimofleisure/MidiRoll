@@ -43,8 +43,10 @@
 
 IMPLEMENT_DYNCREATE(CMidiRollView, CScrollView)
 
-#define ID_VIEW_COLOR_SCHEME_FIRST ID_VIEW_COLOR_SCHEME_DARK
-#define ID_VIEW_COLOR_SCHEME_LAST ID_VIEW_COLOR_SCHEME_LIGHT
+#define ID_VIEW_COLOR_SCHEME_FIRST ID_VIEW_COLOR_SCHEME_1
+#define ID_VIEW_COLOR_SCHEME_LAST ID_VIEW_COLOR_SCHEME_2
+#define ID_VIEW_ALPHA_PRESET_FIRST ID_VIEW_ALPHA_PRESET_1
+#define ID_VIEW_ALPHA_PRESET_LAST ID_VIEW_ALPHA_PRESET_3
 
 // CMidiRollView construction/destruction
 
@@ -63,7 +65,7 @@ const CMidiRollView::COLOR_SCHEME CMidiRollView::m_arrColorScheme[COLOR_SCHEMES]
 	},
 };
 
-const float CMidiRollView::m_arrAlphaPreset[ALPHA_PRESETS] = {1, 0.5};
+const float CMidiRollView::m_arrAlphaPreset[ALPHA_PRESETS] = {1, 0.5, -1};
 
 #define RK_COLOR_SCHEME _T("ColorScheme")
 #define RK_ALPHA_PRESET _T("AlphaPreset")
@@ -80,8 +82,9 @@ CMidiRollView::CMidiRollView()
 	m_nPlayStartTime = 0;
 	m_fPlayNowTime = 0;
 	m_fSlackTimeOffset = 0;
-//	m_fSlackTimeOffset = -0.2;	// -200 ms for Facts in Dispute
-	m_fSlackTimeOffset = 0.3;	// +300 ms for Carved By Ear
+	m_fSlackTimeOffset = -0.2;	// -200 ms for Facts in Dispute
+//	m_fSlackTimeOffset = 0.3;	// +300 ms for Carved By Ear
+//	m_fSlackTimeOffset = -0.1;	// for BalaGray videos
 	m_ptInitZoom = DPoint(0.125, 1);
 	m_ptZoom = m_ptInitZoom;
 	m_ptScrollPos = DPoint(0, 0);
@@ -99,6 +102,8 @@ CMidiRollView::CMidiRollView()
 	m_colorScheme = m_arrColorScheme[m_iColorScheme];
 	m_iAlphaPreset = theApp.GetProfileInt(REG_SETTINGS, RK_ALPHA_PRESET, AP_OPAQUE);
 	m_fAlpha = m_arrAlphaPreset[m_iAlphaPreset];
+	m_nMinVelo = 0;
+	m_nMaxVelo = 0;
 }
 
 CMidiRollView::~CMidiRollView()
@@ -513,6 +518,9 @@ LRESULT CMidiRollView::OnDrawD2D(WPARAM wParam, LPARAM lParam)
 	float	fRoundedRad = float(fKeyHeight / 4);
 	CD2DSizeF szRounded(fRoundedRad, fRoundedRad);
 	int	nNotes = pDoc->m_arrNote.GetSize();
+	int	nLowVelo = pDoc->m_nLowVelo;
+	int	nVeloRange = pDoc->m_nHighVelo - pDoc->m_nLowVelo + 1;
+	const double	fVeloAlphaRange = 1.0 / 3.0;
 	for (int iNote = 0; iNote < nNotes; iNote++) {
 		const CMidiRollDoc::CNoteEvent	note = pDoc->m_arrNote[iNote];
 		double	x1 = note.m_nStartTime * m_ptZoom.x - m_ptScrollPos.x;
@@ -530,7 +538,11 @@ LRESULT CMidiRollView::OnDrawD2D(WPARAM wParam, LPARAM lParam)
 #endif
 		BOOL	iSelState = iNote == m_iCurNote;
 		D2D1_COLOR_F	clrFill = m_arrChanColor[iChan][iSelState];
-		clrFill.a = m_fAlpha;
+		if (m_fAlpha >= 0) {
+			clrFill.a = m_fAlpha;
+		} else {
+			clrFill.a = DTF((double(MIDI_P2(note.m_nMsg) - nLowVelo)) / nVeloRange * fVeloAlphaRange + (1 - fVeloAlphaRange));
+		}
 		brFill.SetColor(clrFill);
 		float	fOutlineStroke;
 		if (m_nNowPos >= note.m_nStartTime && m_nNowPos < note.m_nStartTime + nHighlightDur) {
@@ -540,8 +552,13 @@ LRESULT CMidiRollView::OnDrawD2D(WPARAM wParam, LPARAM lParam)
 			fOutlineStroke = fStroke;
 		}
 		CD2DRectF	rNote(DTF(x1), DTF(y1), DTF(x2), DTF(y2));
-		pRT->FillRoundedRectangle(CD2DRoundedRect(rNote, szRounded), &brFill);
-		pRT->DrawRoundedRectangle(CD2DRoundedRect(rNote, szRounded), &brDraw, fOutlineStroke);
+		if (szRounded.width) {
+			pRT->FillRoundedRectangle(CD2DRoundedRect(rNote, szRounded), &brFill);
+			pRT->DrawRoundedRectangle(CD2DRoundedRect(rNote, szRounded), &brDraw, fOutlineStroke);
+		} else {
+			pRT->FillRectangle(rNote, &brFill);
+			pRT->DrawRectangle(rNote, &brDraw, fOutlineStroke);
+		}
 	}
 	if (m_nNowPos >= 0) {
 		double	fNowX = m_nNowPos * m_ptZoom.x - m_ptScrollPos.x;
@@ -611,11 +628,14 @@ bool CMidiRollView::ExportVideo(LPCTSTR pszFolderPath, CSize szFrame, double fFr
 	CProgressDlg	dlg;
 	if (!dlg.Create(AfxGetMainWnd()))	// create progress dialog
 		return false;
+	CD2DSizeF	szNewView(imgWriter.m_rt.GetSize());
+	CD2DSizeF	szNewDpi(imgWriter.m_rt.GetDpi());
 	CSaveObj<bool> saveExporting(m_bIsExporting, true);
-	CSaveObj<CD2DSizeF>	saveSize(m_szView, imgWriter.m_rt.GetSize());
-	CSaveObj<CD2DSizeF>	saveDpi(m_szDPI, imgWriter.m_rt.GetDpi());
+	double	fXScale = m_szDPI.width / szNewDpi.width;
+	CSaveObj<CD2DSizeF>	saveSize(m_szView, szNewView);
+	CSaveObj<CD2DSizeF>	saveDpi(m_szDPI, szNewDpi);
 	CSaveObj<int>	savePos(m_nNowPos);
-	CSaveObj<DPoint>	saveZoom(m_ptZoom, DPoint(GetKeyHeight() / pDoc->m_nTimeDiv, 1));
+	CSaveObj<DPoint>	saveZoom(m_ptZoom, DPoint(m_ptZoom.x * fXScale, 1));
 	CSaveObj<DPoint>	saveScrollPos(m_ptScrollPos, DPoint(0, 0));
 	dlg.SetRange(0, nDurationFrames);
 	m_nPlayStartTime = 0;
@@ -664,8 +684,8 @@ BEGIN_MESSAGE_MAP(CMidiRollView, CScrollView)
 	ON_WM_KEYDOWN()
 	ON_COMMAND_RANGE(ID_VIEW_COLOR_SCHEME_FIRST, ID_VIEW_COLOR_SCHEME_LAST, OnColorScheme)
 	ON_UPDATE_COMMAND_UI_RANGE(ID_VIEW_COLOR_SCHEME_FIRST, ID_VIEW_COLOR_SCHEME_LAST, OnUpdateColorScheme)
-	ON_COMMAND(ID_VIEW_TRANSPARENT, OnTransparent)
-	ON_UPDATE_COMMAND_UI(ID_VIEW_TRANSPARENT, OnUpdateTransparent)
+	ON_COMMAND_RANGE(ID_VIEW_ALPHA_PRESET_FIRST, ID_VIEW_ALPHA_PRESET_LAST, OnAlphaPreset)
+	ON_UPDATE_COMMAND_UI_RANGE(ID_VIEW_ALPHA_PRESET_FIRST, ID_VIEW_ALPHA_PRESET_LAST, OnUpdateAlphaPreset)
 	ON_COMMAND(ID_VIEW_REWIND, OnRewind)
 END_MESSAGE_MAP()
 
@@ -995,16 +1015,20 @@ void CMidiRollView::OnUpdateColorScheme(CCmdUI *pCmdUI)
 	pCmdUI->SetRadio(iScheme == m_iColorScheme);
 }
 
-void CMidiRollView::OnTransparent()
+void CMidiRollView::OnAlphaPreset(UINT nID)
 {
-	m_iAlphaPreset ^= 1;
-	m_fAlpha = m_arrAlphaPreset[m_iAlphaPreset];
+	int	iPreset = nID - ID_VIEW_ALPHA_PRESET_FIRST;
+	ASSERT(iPreset >= 0 && iPreset < ALPHA_PRESETS);
+	m_fAlpha = m_arrAlphaPreset[iPreset];
+	m_iAlphaPreset = iPreset;
 	Invalidate();
 }
 
-void CMidiRollView::OnUpdateTransparent(CCmdUI *pCmdUI)
+void CMidiRollView::OnUpdateAlphaPreset(CCmdUI *pCmdUI)
 {
-	pCmdUI->SetCheck(m_iAlphaPreset);
+	int	iPreset = pCmdUI->m_nID - ID_VIEW_ALPHA_PRESET_FIRST;
+	ASSERT(iPreset >= 0 && iPreset < ALPHA_PRESETS);
+	pCmdUI->SetRadio(iPreset == m_iAlphaPreset);
 }
 
 void CMidiRollView::OnRewind()

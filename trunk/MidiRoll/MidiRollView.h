@@ -80,15 +80,16 @@ protected:
 		AXIS_MASK_Y = 0x02,
 		AXIS_MASK_BOTH = 0x03,
 	};
-	enum {
+	enum {	// color schemes
 		CS_DARK,
 		CS_LIGHT,
 		COLOR_SCHEMES
 	};
-	enum {
+	enum {	// alpha presets
 		AP_OPAQUE,
 		AP_HALF,
-		ALPHA_PRESETS = 2,
+		AP_VELOCITY,
+		ALPHA_PRESETS,
 	};
 
 	static const COLOR_SCHEME m_arrColorScheme[COLOR_SCHEMES];
@@ -123,6 +124,8 @@ protected:
 	COLOR_SCHEME	m_colorScheme;	// color scheme
 	float	m_fAlpha;	// normalized alpha
 	int		m_iAlphaPreset;	// index of alpha preset
+	int		m_nMinVelo;
+	int		m_nMaxVelo;
 
 // Helpers
 	bool	ExportVideo(LPCTSTR pszFolderPath, CSize szFrame, double fFrameRate, int nDurationFrames);
@@ -184,8 +187,8 @@ protected:
 	afx_msg void OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags);
 	afx_msg void OnColorScheme(UINT nID);
 	afx_msg void OnUpdateColorScheme(CCmdUI *pCmdUI);
-	afx_msg void OnTransparent();
-	afx_msg void OnUpdateTransparent(CCmdUI *pCmdUI);
+	afx_msg void OnAlphaPreset(UINT nID);
+	afx_msg void OnUpdateAlphaPreset(CCmdUI *pCmdUI);
 	afx_msg void OnRewind();
 };
 

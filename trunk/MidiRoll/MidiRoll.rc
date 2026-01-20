@@ -185,10 +185,12 @@ BEGIN
         END
         POPUP "&Color Scheme"
         BEGIN
-            MENUITEM "&Light",                      ID_VIEW_COLOR_SCHEME_LIGHT
-            MENUITEM "&Dark",                       ID_VIEW_COLOR_SCHEME_DARK
+            MENUITEM "&Light",                      ID_VIEW_COLOR_SCHEME_1
+            MENUITEM "&Dark",                       ID_VIEW_COLOR_SCHEME_2
             MENUITEM SEPARATOR
-            MENUITEM "&Transparent",                ID_VIEW_TRANSPARENT
+            MENUITEM "&Opaque",                     ID_VIEW_ALPHA_PRESET_1
+            MENUITEM "&Transparent",                ID_VIEW_ALPHA_PRESET_2
+            MENUITEM "&Velocity",                   ID_VIEW_ALPHA_PRESET_3
         END
     END
     POPUP "&Help"
@@ -387,10 +389,15 @@ STRINGTABLE
 BEGIN
     ID_INDICATOR_CUR_NOTE   "00000:00:000 0000 000 00000:00:000"
     ID_INDICATOR_CUR_TEMPO  "0000.00"
+    ID_VIEW_ALPHA_PRESET_1  "Draw notes in solid color"
+    ID_VIEW_ALPHA_PRESET_2  "Draw notes partially transparent"
+    ID_VIEW_ALPHA_PRESET_3  "Show velocity by making softer notes more transparent"
 END
 
 STRINGTABLE
 BEGIN
+    ID_VIEW_COLOR_SCHEME_1  "Use light colors"
+    ID_VIEW_COLOR_SCHEME_2  "Use dark colors"
     ID_VIEW_CUSTOMIZE       "Customize"
     ID_VIEW_PLAY            "Toggle playback"
     ID_VIEW_RECORD          "Export video"
