@@ -99,6 +99,10 @@ BEGIN
     BUTTON      ID_EDIT_PASTE
     SEPARATOR
     BUTTON      ID_FILE_PRINT
+    SEPARATOR
+    BUTTON      ID_TRACKS_COMBO
+    BUTTON      ID_CHANNELS_COMBO
+    SEPARATOR
     BUTTON      ID_APP_ABOUT
 END
 
@@ -113,6 +117,10 @@ BEGIN
     BUTTON      ID_EDIT_PASTE
     SEPARATOR
     BUTTON      ID_FILE_PRINT
+    SEPARATOR
+    BUTTON      ID_TRACKS_COMBO
+    BUTTON      ID_CHANNELS_COMBO
+    SEPARATOR
     BUTTON      ID_APP_ABOUT
 END
 
@@ -130,6 +138,7 @@ BEGIN
         MENUITEM "&Open...\tCtrl+O",            ID_FILE_OPEN
         MENUITEM "&Save\tCtrl+S",               ID_FILE_SAVE
         MENUITEM "Save &As...",                 ID_FILE_SAVE_AS
+        MENUITEM "&Info",                       ID_FILE_INFO
         MENUITEM SEPARATOR
         MENUITEM "Recent File",                 ID_FILE_MRU_FILE1
         MENUITEM SEPARATOR
@@ -192,6 +201,7 @@ BEGIN
             MENUITEM "&Transparent",                ID_VIEW_ALPHA_PRESET_2
             MENUITEM "&Velocity",                   ID_VIEW_ALPHA_PRESET_3
         END
+        MENUITEM "Ro&unded",                    ID_VIEW_ROUNDED
     END
     POPUP "&Help"
     BEGIN
@@ -262,17 +272,6 @@ END
 // Dialog
 //
 
-IDD_ABOUTBOX DIALOGEX 0, 0, 170, 62
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "About MidiRoll"
-FONT 8, "MS Shell Dlg", 0, 0, 0x1
-BEGIN
-    ICON            IDR_MAINFRAME,IDC_STATIC,14,14,21,20
-    LTEXT           "MidiRoll, Version 1.0",IDC_STATIC,42,14,114,8,SS_NOPREFIX
-    LTEXT           "Copyright (C) 2025",IDC_STATIC,42,26,114,8
-    DEFPUSHBUTTON   "OK",IDOK,113,41,50,14,WS_GROUP
-END
-
 IDD_RECORD DIALOGEX 0, 0, 219, 101
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Record"
@@ -304,6 +303,18 @@ BEGIN
     RTEXT           "",IDC_PROGRESS_PERCENT,139,27,40,15,SS_CENTERIMAGE
 END
 
+IDD_ABOUTBOX DIALOGEX 0, 0, 240, 100
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "About Polymeter"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    ICON            IDR_MAINFRAME,IDC_STATIC,7,7,20,20
+    LTEXT           "Polymeter 0.0",IDC_ABOUT_VERSION,40,7,135,8,SS_NOPREFIX
+    LTEXT           "Copyleft 2025 Chris Korda",IDC_STATIC,40,20,135,8
+    DEFPUSHBUTTON   "OK",IDOK,183,7,50,14,WS_GROUP
+    EDITTEXT        IDC_ABOUT_LICENSE,7,38,226,55,ES_MULTILINE | ES_READONLY | WS_VSCROLL
+END
+
 
 /////////////////////////////////////////////////////////////////////////////
 //
@@ -311,8 +322,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,1
- PRODUCTVERSION 1,0,0,1
+ FILEVERSION 1,0,0,7
+ PRODUCTVERSION 1,0,0,7
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -325,16 +336,16 @@ VS_VERSION_INFO VERSIONINFO
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
-        BLOCK "040904B0"
+        BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "TODO: <Company name>"
+            VALUE "CompanyName", "Anal Software"
             VALUE "FileDescription", "MidiRoll"
-            VALUE "FileVersion", "1.0.0.1"
+            VALUE "FileVersion", "1.0.0.7"
             VALUE "InternalName", "MidiRoll.exe"
-            VALUE "LegalCopyright", "TODO: (c) <Company name>.  All rights reserved."
+            VALUE "LegalCopyright", "Copyleft 2025 Chris Korda"
             VALUE "OriginalFilename", "MidiRoll.exe"
-            VALUE "ProductName", "TODO: <Product name>"
-            VALUE "ProductVersion", "1.0.0.1"
+            VALUE "ProductName", "MidiRoll"
+            VALUE "ProductVersion", "1.0.0.7"
         END
     END
     BLOCK "VarFileInfo"
@@ -352,14 +363,6 @@ END
 #ifdef APSTUDIO_INVOKED
 GUIDELINES DESIGNINFO
 BEGIN
-    IDD_ABOUTBOX, DIALOG
-    BEGIN
-        LEFTMARGIN, 7
-        RIGHTMARGIN, 163
-        TOPMARGIN, 7
-        BOTTOMMARGIN, 55
-    END
-
     IDD_RECORD, DIALOG
     BEGIN
         LEFTMARGIN, 7
@@ -370,6 +373,14 @@ BEGIN
 
     IDD_PROGRESS, DIALOG
     BEGIN
+    END
+
+    IDD_ABOUTBOX, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 233
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 93
     END
 END
 #endif    // APSTUDIO_INVOKED
@@ -382,13 +393,36 @@ END
 
 STRINGTABLE
 BEGIN
+    IDS_RECDLG_CUSTOM       "Custom"
+    IDS_SC_MAXIMIZE         "&Maximize"
+    IDS_SC_RESTORE          "&Restore"
+    IDS_STATUS_PANE1        "Pane 1"
+    IDS_STATUS_PANE2        "Pane 2"
+    IDS_TEMPO_TRACK_NAME    "Tempo"
+    IDS_TOOLBAR_CUSTOMIZE   "Customize..."
+    IDS_TOOLBAR_STANDARD    "Standard"
     IDP_OLE_INIT_FAILED     "OLE initialization failed.  Make sure that the OLE libraries are the correct version."
 END
 
 STRINGTABLE
 BEGIN
+    IDS_ALL                 "All"
+    IDS_APP_LICENSE         "This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.  This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.  You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111 USA."
+    IDS_APP_UNKNOWN_SYSTEM_ERROR "Unknown system error %d (0x%X)"
+    IDS_APP_UNKNOWN_SYSTEM_ERROR2 "Unknown system error %d (0x%X)"
+    IDS_BAR_Channels        "Channels"
+    IDS_BAR_Tracks          "Tracks"
+    IDS_EDIT_MENU           "Edit"
+    IDS_PHASE_EXPORT_OVERWRITE_WARN 
+                            "Destination folder already contains an image sequence.\nDo you want to replace it?"
+END
+
+STRINGTABLE
+BEGIN
+    ID_CHANNELS_COMBO       "Select a MIDI channel to show\nChannel Selection"
     ID_INDICATOR_CUR_NOTE   "00000:00:000 0000 000 00000:00:000"
     ID_INDICATOR_CUR_TEMPO  "0000.00"
+    ID_TRACKS_COMBO         "Select a MIDI file track to show\nTrack Selection"
     ID_VIEW_ALPHA_PRESET_1  "Draw notes in solid color"
     ID_VIEW_ALPHA_PRESET_2  "Draw notes partially transparent"
     ID_VIEW_ALPHA_PRESET_3  "Show velocity by making softer notes more transparent"
@@ -401,9 +435,17 @@ BEGIN
     ID_VIEW_CUSTOMIZE       "Customize"
     ID_VIEW_PLAY            "Toggle playback"
     ID_VIEW_RECORD          "Export video"
+    ID_VIEW_ROUNDED         "Draw note with rounded corners"
     ID_VIEW_ZOOM_IN         "Zoom in"
     ID_VIEW_ZOOM_OUT        "Zoom out"
+END
+
+STRINGTABLE
+BEGIN
     ID_VIEW_ZOOM_RESET      "Reset zoom"
+    ID_VIEW_ZOOM_VERT_IN    "Zoom in"
+    ID_VIEW_ZOOM_VERT_OUT   "Zoom Out"
+    ID_VIEW_ZOOM_VERT_RESET "Reset zoom"
 END
 
 STRINGTABLE
@@ -508,19 +550,6 @@ STRINGTABLE
 BEGIN
     AFX_IDS_SCRESTORE       "Restore the window to normal size"
     AFX_IDS_SCTASKLIST      "Activate Task List"
-END
-
-STRINGTABLE
-BEGIN
-    IDS_APP_UNKNOWN_SYSTEM_ERROR "Unknown system error %d (0x%X)"
-    IDS_EDIT_MENU           "Edit"
-    IDS_PHASE_EXPORT_OVERWRITE_WARN 
-                            "Destination folder already contains an image sequence.\nDo you want to replace it?"
-    IDS_RECDLG_CUSTOM       "Custom"
-    IDS_STATUS_PANE1        "Pane 1"
-    IDS_STATUS_PANE2        "Pane 2"
-    IDS_TOOLBAR_CUSTOMIZE   "Customize..."
-    IDS_TOOLBAR_STANDARD    "Standard"
 END
 
 #endif    // English (United States) resources

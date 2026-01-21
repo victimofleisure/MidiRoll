@@ -27,12 +27,14 @@
 //
 
 class CMainFrame;
+class CMidiRollDoc;
 
 class CMidiRollApp : public CWinAppCK
 {
 public:
 	CMidiRollApp();
 
+	CMidiRollDoc	*m_pDoc;
 
 // Overrides
 public:
@@ -47,6 +49,8 @@ public:
 	virtual void PreLoadState();
 	virtual void LoadCustomState();
 	virtual void SaveCustomState();
+
+	LRESULT	OnTrackingHelp(WPARAM wParam, LPARAM lParam);
 
 	afx_msg void OnAppAbout();
 	DECLARE_MESSAGE_MAP()

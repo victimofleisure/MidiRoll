@@ -8,6 +8,7 @@
 		revision history:
 		rev		date	comments
 		00		23jul25	initial version
+		01		21jan26	add channel and track selection
  
 */
 
@@ -78,6 +79,7 @@ CMidiRollView::CMidiRollView()
 	m_bUsingD2D = false;
 	m_bIsPlaying = false;
 	m_bIsExporting = false;
+	m_bIsRounded = false;
 	m_nDeferredUpdate = 0;
 	m_nPlayStartTime = 0;
 	m_fPlayNowTime = 0;
@@ -102,8 +104,6 @@ CMidiRollView::CMidiRollView()
 	m_colorScheme = m_arrColorScheme[m_iColorScheme];
 	m_iAlphaPreset = theApp.GetProfileInt(REG_SETTINGS, RK_ALPHA_PRESET, AP_OPAQUE);
 	m_fAlpha = m_arrAlphaPreset[m_iAlphaPreset];
-	m_nMinVelo = 0;
-	m_nMaxVelo = 0;
 }
 
 CMidiRollView::~CMidiRollView()
@@ -246,6 +246,8 @@ void CMidiRollView::UpdateRuler()
 	double	fZoom = 1 / (DipToGdi(DPoint(m_ptZoom.x, 0)).x * nPPQ);
 	m_wndRuler.SetZoom(fZoom);
 	m_wndRuler.SetScrollPosition(GetScrollPosition().x - m_szEdge.cx);
+	CRulerCtrl::CTickArray	arrTick;
+	m_wndRuler.CalcTextExtent(&arrTick);
 }
 
 void CMidiRollView::FitToView(int iAxis)
@@ -511,16 +513,30 @@ LRESULT CMidiRollView::OnDrawD2D(WPARAM wParam, LPARAM lParam)
 		}
 	}
 	int	nBeats = pDoc->m_nEndTime / m_nBeatQuant;
+	double	fBeatWidth = m_nBeatQuant * m_ptZoom.x;
+	const double	fBase = 2;	// powers of two
+	const int	nGridSync = 5;	// in steps of powers of two
+	double	fNearestExp = log(fBeatWidth) / log(fBase);
+	int	nNearestIntExp = Trunc(fNearestExp);
+	if (fNearestExp >= 0)	// if nearest exponent is positive
+		nNearestIntExp++;	// chop it up; otherwise chop it down
+	double	fGridScale = pow(fBase, nNearestIntExp - nGridSync);
+	fBeatWidth /= fGridScale;
+	nBeats = Round(nBeats * fGridScale);
 	for (int iBeat = 0; iBeat <= nBeats; iBeat++) {
-		double	x = iBeat * m_nBeatQuant * m_ptZoom.x - m_ptScrollPos.x;
+		double	x = iBeat * fBeatWidth - m_ptScrollPos.x;
 		pRT->DrawLine(CD2DPointF(DTF(x), DTF(0)), CD2DPointF(DTF(x), DTF(m_szView.height)), &brSharp, fStroke);
 	}
-	float	fRoundedRad = float(fKeyHeight / 4);
-	CD2DSizeF szRounded(fRoundedRad, fRoundedRad);
+	CD2DSizeF szRounded;
+	if (m_bIsRounded) {
+		float	fRoundedRad = float(fKeyHeight / 4);
+		szRounded = CD2DSizeF(fRoundedRad, fRoundedRad);
+	}
 	int	nNotes = pDoc->m_arrNote.GetSize();
 	int	nLowVelo = pDoc->m_nLowVelo;
 	int	nVeloRange = pDoc->m_nHighVelo - pDoc->m_nLowVelo + 1;
 	const double	fVeloAlphaRange = 1.0 / 3.0;
+	WORD	nChanMask = pDoc->m_nChanSelMask;
 	for (int iNote = 0; iNote < nNotes; iNote++) {
 		const CMidiRollDoc::CNoteEvent	note = pDoc->m_arrNote[iNote];
 		double	x1 = note.m_nStartTime * m_ptZoom.x - m_ptScrollPos.x;
@@ -530,7 +546,12 @@ LRESULT CMidiRollView::OnDrawD2D(WPARAM wParam, LPARAM lParam)
 		if (x2 < 0 || y2 < 0 || x1 > m_szView.width || y1 > m_szView.height) {
 			continue;	// cull
 		}
+		int	iTrack = note.m_iTrack;
+		if (!pDoc->m_arrTrackSelect[iTrack])
+			continue;
 		int	iChan = MIDI_CHAN(note.m_nMsg);
+		if (!((1 << iChan) & nChanMask))
+			continue;
 #if REMAP_CHANNELS
 		if (iChan < _countof(m_arrChanMap)) {
 			iChan = m_arrChanMap[iChan];
@@ -658,6 +679,13 @@ bool CMidiRollView::ExportVideo(LPCTSTR pszFolderPath, CSize szFrame, double fFr
 	return true;
 }
 
+void CMidiRollView::OnUpdate(CView* pSender, LPARAM lHint, CObject* pHint)
+{
+//	printf("CMidiRollView::OnUpdate %x %d %x\n", pSender, lHint, pHint);
+	Invalidate();
+	theApp.GetMainFrame()->OnUpdate(pSender, lHint, pHint);	// notify main frame
+}
+
 // CMidiRollView message map
 
 BEGIN_MESSAGE_MAP(CMidiRollView, CScrollView)
@@ -687,6 +715,8 @@ BEGIN_MESSAGE_MAP(CMidiRollView, CScrollView)
 	ON_COMMAND_RANGE(ID_VIEW_ALPHA_PRESET_FIRST, ID_VIEW_ALPHA_PRESET_LAST, OnAlphaPreset)
 	ON_UPDATE_COMMAND_UI_RANGE(ID_VIEW_ALPHA_PRESET_FIRST, ID_VIEW_ALPHA_PRESET_LAST, OnUpdateAlphaPreset)
 	ON_COMMAND(ID_VIEW_REWIND, OnRewind)
+	ON_COMMAND(ID_VIEW_ROUNDED, OnRounded)
+	ON_UPDATE_COMMAND_UI(ID_VIEW_ROUNDED, OnUpdateRounded)
 END_MESSAGE_MAP()
 
 // CMidiRollView message handlers
@@ -1037,3 +1067,13 @@ void CMidiRollView::OnRewind()
 	Invalidate();
 }
 
+void CMidiRollView::OnRounded()
+{
+	m_bIsRounded ^= 1;
+}
+
+void CMidiRollView::OnUpdateRounded(CCmdUI *pCmdUI)
+{
+	pCmdUI->SetCheck(m_bIsRounded);
+	Invalidate();
+}

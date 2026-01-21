@@ -18,8 +18,9 @@
 #include "MidiRoll.h"
 #include "MidiRollDoc.h"
 
-#include "Midi.h"
+#include "MainFrm.h"
 #include "PathStr.h"
+#include "Note.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -29,20 +30,20 @@
 
 IMPLEMENT_DYNCREATE(CMidiRollDoc, CDocument)
 
+const LPCTSTR CMidiRollDoc::m_arrErrorName[ERROR_TYPES] = {
+	_T(""),
+	_T("note overlap"),
+	_T("spurious off"),
+	_T("hanging note"),
+};
+
 // CMidiRollDoc construction/destruction
 
 CMidiRollDoc::CMidiRollDoc()
 {
-	ZeroMemory(&m_sigTime, sizeof(m_sigTime));
-	ZeroMemory(&m_sigKey, sizeof(m_sigKey));
-	m_fTempo = 0;
-	m_nLowNote = 0;
-	m_nHighNote = 0;
-	m_nLowVelo = 0;
-	m_nHighVelo = 0;
-	m_nEndTime = 0;
-	m_nTimeDiv = 0;
-	m_nMeter = 0;
+	ASSERT(theApp.m_pDoc == NULL);
+	theApp.m_pDoc = this;
+	ResetData();
 }
 
 CMidiRollDoc::~CMidiRollDoc()
@@ -54,22 +55,42 @@ BOOL CMidiRollDoc::OnNewDocument()
 	if (!CDocument::OnNewDocument())
 		return FALSE;
 
-	// TODO: add reinitialization code here
-	// (SDI documents will reuse this document)
+	ResetData();
 
 	return TRUE;
 }
 
+void CMidiRollDoc::ResetData()
+{
+	ZeroMemory(&m_sigTime, sizeof(m_sigTime));
+	ZeroMemory(&m_sigKey, sizeof(m_sigKey));
+	m_fTempo = 0;
+	m_nLowNote = 0;
+	m_nHighNote = 0;
+	m_nLowVelo = 0;
+	m_nHighVelo = 0;
+	m_nEndTime = 0;
+	m_nTimeDiv = 0;
+	m_nMeter = 0;
+	m_nChanUsedMask = 0;
+	m_nChanSelMask = 0;
+	m_arrNote.RemoveAll();
+	m_arrTrackName.RemoveAll();
+	m_arrTempo.RemoveAll();
+	m_arrTrackSelect.RemoveAll();
+}
+
 bool CMidiRollDoc::ReadMidiNotes(LPCTSTR pszMidiPath)
 {
-	CMidiFile	mf;
-	mf.Open(pszMidiPath, CFile::modeRead);
+	CMidiFile	fMidi;
+	fMidi.Open(pszMidiPath, CFile::modeRead);
 	CMidiFile::CMidiTrackArray	arrTrack;
-	CStringArrayEx	arrTrackName;
 	UINT	nTempo = 0;
 	m_arrTempo.RemoveAll();
 	USHORT	nPPQ;
-	mf.ReadTracks(arrTrack, arrTrackName, nPPQ, &nTempo, &m_sigTime, &m_sigKey, &m_arrTempo);
+	fMidi.ReadTracks(arrTrack, m_arrTrackName, nPPQ, &nTempo, &m_sigTime, &m_sigKey, &m_arrTempo);
+	if (arrTrack.GetSize() && m_arrTrackName[0].IsEmpty())
+		m_arrTrackName[0].LoadString(IDS_TEMPO_TRACK_NAME);
 	m_nTimeDiv = nPPQ;
 	m_fTempo = double(CMidiFile::MICROS_PER_MINUTE) / nTempo;
 	m_nMeter = m_sigTime.Numerator;
@@ -79,32 +100,19 @@ bool CMidiRollDoc::ReadMidiNotes(LPCTSTR pszMidiPath)
 	m_nLowVelo = MIDI_NOTE_MAX;
 	m_nHighVelo = 0;
 	m_nEndTime = 0;
-	enum {
-		ET_OVERLAP,
-		ET_SPURIOUS,
-		ET_HANGING,
-		ERROR_TYPES
-	};
+	m_nChanUsedMask = 0;
+	m_nChanSelMask = 0;
 	int	nErrors[ERROR_TYPES] = {0};
-	struct ERROR_INFO {
-		int		nPos;	// position in ticks
-		BYTE	nType;	// error type; see enum
-		BYTE	nChan;	// zero-based MIDI channel
-		BYTE	nNote;	// zero-based MIDI note
-	};
-	static const LPCTSTR	arrErrorName[ERROR_TYPES] = {
-		_T("note overlap"),
-		_T("spurious off"),
-		_T("hanging note"),
-	};
-	CArrayEx<ERROR_INFO, ERROR_INFO&> arrError;
+	CErrorInfoArray	arrError;
 	int	nTracks = arrTrack.GetSize();
+	m_arrTrackSelect.FastSetSize(nTracks);
+	memset(m_arrTrackSelect.GetData(), true, nTracks * sizeof(bool));
 	for (int iTrack = 1; iTrack < nTracks; iTrack++) {
 		const CMidiFile::CMidiEventArray	arrEvt = arrTrack[iTrack];
 		int	nEvts = arrEvt.GetSize();
 //		printf("track %d: %d events\n", iTrack, nEvts);
-		int	arrNoteStart[MIDI_NOTES] = {0};
-		BYTE	arrNoteVel[MIDI_NOTES] = {0};
+		int	arrNoteStart[MIDI_CHANNELS][MIDI_NOTES] = {0};
+		BYTE	arrNoteVel[MIDI_CHANNELS][MIDI_NOTES] = {0};
 		int	nCurTime = 0;
 		for (int iEvt = 0; iEvt < nEvts; iEvt++) {
 			DWORD	nMsg = arrEvt[iEvt].Msg;
@@ -112,36 +120,38 @@ bool CMidiRollDoc::ReadMidiNotes(LPCTSTR pszMidiPath)
 			nCurTime += nDeltaT;
 //			printf("%d %d %d %d %d\n", nCurTime, MIDI_CMD_IDX(nMsg), MIDI_CHAN(nMsg), MIDI_P1(nMsg), MIDI_P2(nMsg));
 			BYTE	nCmd = MIDI_CMD(nMsg);
-			if (nCmd == NOTE_ON || nCmd == NOTE_OFF) {
+			if (nCmd == NOTE_ON || nCmd == NOTE_OFF) {	// if note command
 				int	iNote = MIDI_P1(nMsg);
 				int	nVel = MIDI_P2(nMsg);
+				int	iChan = MIDI_CHAN(nMsg);
 				bool	bNoteOn = (nCmd == NOTE_ON && nVel != 0);
-				bool	bSaveNoteOn = bNoteOn;
-				int	nErrType = -1;
+				bool	bOrigNoteOn = bNoteOn;
+				int	nErrType = ET_NONE;
 				if (bNoteOn) {	// if note on event
-					if (arrNoteStart[iNote]) {	// if note is active
+					if (arrNoteStart[iChan][iNote]) {	// if note is active
 						nErrType = ET_OVERLAP;	// error: note overlap
-						bNoteOn = false;	// retrigger
+						bNoteOn = false;	// retrigger note
 					}
 				} else {	// note off event
-					if (!arrNoteStart[iNote]) {	// if note is passive
+					if (!arrNoteStart[iChan][iNote]) {	// if note is passive
 						nErrType = ET_SPURIOUS;	// error: spurious off
-						bNoteOn = true;	// suppress
+						bNoteOn = true;	// suppress note off
 					}
 				}
-				if (nErrType >= 0) {	// if error occurred
-					ERROR_INFO	info = {nCurTime, nErrType, MIDI_CHAN(nMsg), iNote};
+				if (nErrType > ET_NONE) {	// if error occurred
+					ERROR_INFO	info = {nCurTime, nErrType, iChan, iNote};
 					arrError.Add(info);	// log error
 					nErrors[nErrType]++;	// bump error type count
 				}
 				if (!bNoteOn) {	// if note is complete
-					int	nStartTime = arrNoteStart[iNote] - 1;
+					int	nStartTime = arrNoteStart[iChan][iNote] - 1;
 					int	nDuration = nCurTime - nStartTime;
-					int	nStartVel = arrNoteVel[iNote];
+					int	nStartVel = arrNoteVel[iChan][iNote];
 					CNoteEvent	note;
 					note.m_nStartTime = nStartTime;
 					note.m_nDuration = nDuration;
 					note.m_nMsg = nMsg | (nStartVel << 16);
+					note.m_iTrack = iTrack;
 					m_arrNote.Add(note);
 					if (iNote < m_nLowNote) {
 						m_nLowNote = iNote;
@@ -149,16 +159,17 @@ bool CMidiRollDoc::ReadMidiNotes(LPCTSTR pszMidiPath)
 					if (iNote > m_nHighNote) {
 						m_nHighNote = iNote;
 					}
-					arrNoteStart[iNote] = 0;
-					arrNoteVel[iNote] = 0;
+					arrNoteStart[iChan][iNote] = 0;
+					arrNoteVel[iChan][iNote] = 0;
 					int	nEndTime = nStartTime + nDuration;
 					if (nEndTime > m_nEndTime) {
 						m_nEndTime = nEndTime;
 					}
+					m_nChanUsedMask |= MakeChannelMask(iChan);
 				}
-				if (bSaveNoteOn) {	// if note on event
-					arrNoteStart[iNote] = nCurTime + 1;
-					arrNoteVel[iNote] = nVel;
+				if (bOrigNoteOn) {	// if note on event
+					arrNoteStart[iChan][iNote] = nCurTime + 1;
+					arrNoteVel[iChan][iNote] = nVel;
 					if (nVel < m_nLowVelo) {
 						m_nLowVelo = nVel;
 					}
@@ -168,15 +179,18 @@ bool CMidiRollDoc::ReadMidiNotes(LPCTSTR pszMidiPath)
 				}
 			}
 		}
-		for (int iNote = 0; iNote < MIDI_NOTES; iNote++) {
-			if (arrNoteStart[iNote]) {	// if note still active
-				ERROR_INFO	info = {arrNoteStart[iNote], ET_HANGING, iTrack, iNote};
-				arrError.Add(info);	// log error
-				nErrors[ET_HANGING]++;	// bump error type count
+		for (int iChan = 0; iChan < MIDI_CHANNELS; iChan++) {	// for each channel
+			for (int iNote = 0; iNote < MIDI_NOTES; iNote++) {	// for each note
+				if (arrNoteStart[iChan][iNote]) {	// if note still active
+					ERROR_INFO	info = {arrNoteStart[iChan][iNote], ET_HANGING, iTrack, iNote};
+					arrError.Add(info);	// log error
+					nErrors[ET_HANGING]++;	// bump error type count
+				}
 			}
 		}
 	}
 	m_arrNote.Sort();	// sort notes by start position
+	m_nChanSelMask = m_nChanUsedMask;	// select all used channels
 	if (arrError.GetSize()) {	// if errors occurred
 		TRY {
 			CPathStr	sPath;
@@ -189,7 +203,7 @@ bool CMidiRollDoc::ReadMidiNotes(LPCTSTR pszMidiPath)
 					const ERROR_INFO& info = arrError[iErr];
 					CString	sText;
 					sText.Format(_T("%d\t%d\t%d\t"), info.nPos, info.nChan + 1, info.nNote);
-					fOut.WriteString(sText + CString(arrErrorName[info.nType]) + '\n');
+					fOut.WriteString(sText + CString(m_arrErrorName[info.nType]) + '\n');
 				}
 			}
 		}
@@ -315,6 +329,79 @@ void CMidiRollDoc::ConvertDurationToString(int nPos, CString& sPos) const
 		sPos.Format(_T("%d:%03d"), nBeat, nTick);
 }
 
+void CMidiRollDoc::GetSelectedTracks(CIntArrayEx& arrSel) const
+{
+	int	nTracks = m_arrTrackSelect.GetSize();
+	arrSel.SetSize(nTracks);
+	arrSel.FastRemoveAll();
+	for (int iTrack = 0; iTrack < nTracks; iTrack++) {
+		if (m_arrTrackSelect[iTrack])
+			arrSel.Add(iTrack);
+	}
+}
+
+void CMidiRollDoc::SelectAllTracks()
+{
+	memset(m_arrTrackSelect.GetData(), true, m_arrTrackSelect.GetSize() * sizeof(bool));
+	UpdateAllViews(NULL, HINT_TRACK_SEL);
+}
+
+void CMidiRollDoc::SelectTrack(int iTrack)
+{
+	ASSERT(iTrack < m_arrTrackSelect.GetSize());
+	ZeroMemory(m_arrTrackSelect.GetData(), m_arrTrackSelect.GetSize() * sizeof(BYTE));
+	if (iTrack >= 0)
+		m_arrTrackSelect[iTrack] = true;
+	UpdateAllViews(NULL, HINT_TRACK_SEL);
+}
+
+void CMidiRollDoc::GetUsedChannels(CIntArrayEx& arrUsed) const
+{
+	arrUsed.SetSize(MIDI_CHANNELS);
+	arrUsed.FastRemoveAll();
+	for (int iChan = 0; iChan < MIDI_CHANNELS; iChan++) {
+		if (IsChannelUsed(iChan))
+			arrUsed.Add(iChan);
+	}
+}
+
+int CMidiRollDoc::GetUsedChannelCount() const
+{
+	int	nUsed = 0;
+	for (int iChan = 0; iChan < MIDI_CHANNELS; iChan++) {
+		if (IsChannelUsed(iChan))
+			nUsed++;
+	}
+	return nUsed;
+}
+
+void CMidiRollDoc::GetSelectedChannels(CIntArrayEx& arrSel) const
+{
+	arrSel.SetSize(MIDI_CHANNELS);
+	arrSel.FastRemoveAll();
+	for (int iChan = 0; iChan < MIDI_CHANNELS; iChan++) {
+		if (IsChannelSelected(iChan))
+			arrSel.Add(iChan);
+	}
+}
+
+void CMidiRollDoc::SelectAllChannels()
+{
+	m_nChanSelMask = m_nChanUsedMask;
+	UpdateAllViews(NULL, HINT_CHANNEL_SEL);
+}
+
+void CMidiRollDoc::SelectChannel(int iChan)
+{
+	ASSERT(iChan < MIDI_CHANNELS);
+	if (iChan >= 0) {	// if valid channel index
+		m_nChanSelMask = MakeChannelMask(iChan);
+	} else {	// no selection
+		m_nChanSelMask = 0;
+	}
+	UpdateAllViews(NULL, HINT_CHANNEL_SEL);
+}
+
 // CMidiRollDoc serialization
 
 void CMidiRollDoc::Serialize(CArchive& ar)
@@ -346,6 +433,9 @@ void CMidiRollDoc::Dump(CDumpContext& dc) const
 // CMidiRollDoc message map
 
 BEGIN_MESSAGE_MAP(CMidiRollDoc, CDocument)
+	ON_UPDATE_COMMAND_UI(ID_FILE_SAVE, OnUpdateFileSave)
+	ON_COMMAND(ID_FILE_INFO, OnFileInfo)
+	ON_UPDATE_COMMAND_UI(ID_FILE_INFO, OnUpdateFileInfo)
 END_MESSAGE_MAP()
 
 // CMidiRollDoc commands
@@ -359,4 +449,63 @@ BOOL CMidiRollDoc::OnOpenDocument(LPCTSTR lpszPathName)
 		return false;
 
 	return TRUE;
+}
+
+void CMidiRollDoc::OnUpdateFileSave(CCmdUI *pCmdUI)
+{
+	pCmdUI->Enable(false);	// disable save
+}
+
+CString CMidiRollDoc::GetKeySigName(int iSharpsOrFlats)
+{
+	static const LPCTSTR arrKeySigName[] = {
+		_T("Cb"), _T("Gb"), _T("Db"), _T("Ab"), _T("Eb"), _T("Bb"), _T("F"),
+		_T("C"), _T("G"), _T("D"), _T("A"), _T("E"), _T("B"), _T("F#"), _T("C#")
+	};
+	CString	sKeySig;
+	int	iKey = iSharpsOrFlats + 7;
+	if (iKey >= 0 && iKey < _countof(arrKeySigName))
+		sKeySig = arrKeySigName[iKey];
+	return sKeySig;
+}
+
+void CMidiRollDoc::OnFileInfo()
+{
+	if (m_arrTrackName.IsEmpty())
+		return;
+	CString	sTimebase;
+	sTimebase.Format(_T("%d"), m_nTimeDiv);
+	CString	sTempo;
+	sTempo.Format(_T("%.2f"), m_fTempo);
+	CString	sDuration;
+	ConvertDurationToString(m_nEndTime, sDuration);
+	CString	sTimeSig;
+	if (m_sigTime.Numerator)
+		sTimeSig.Format(_T("%d/%d"), m_sigTime.Numerator, 1 << m_sigTime.Denominator);
+	CString	sKeySig(GetKeySigName(m_sigKey.SharpsOrFlats));
+	CString	sTracks;
+	sTracks.Format(_T("%d"), m_arrTrackName.GetSize());
+	CNote	noteLow(m_nLowNote);
+	CNote	noteHigh(m_nHighNote);
+	CNote	noteKey(m_sigKey.SharpsOrFlats * 7);
+	noteKey.Normalize();
+	CString	sNoteRange('(' + noteLow.MidiName(noteKey) 
+		+ _T(", ") + noteHigh.MidiName(noteKey) + ')');
+	CString	sVeloRange;
+	sVeloRange.Format(_T("(%d, %d)"), m_nLowVelo, m_nHighVelo);
+	CString	sMsg = 
+		_T("TPQN:\t") + sTimebase + '\n' +
+		_T("Tempo:\t") + sTempo + '\n' +
+		_T("Length:\t") + sDuration + '\n' +
+		_T("Meter:\t") + sTimeSig + '\n' +
+		_T("Key:\t") + sKeySig + '\n' +
+		_T("Tracks:\t") + sTracks + '\n' +
+		_T("Note R:\t") + sNoteRange + '\n' +
+		_T("Velo R:\t") + sVeloRange;
+	AfxMessageBox(sMsg, MB_ICONINFORMATION);
+}
+
+void CMidiRollDoc::OnUpdateFileInfo(CCmdUI *pCmdUI)
+{
+	pCmdUI->Enable(!m_arrTrackName.IsEmpty());
 }

@@ -106,4 +106,5 @@ enum {	// application-wide user window messages, based on WP_APP
 	UWM_FIRST = WM_APP,
 	UWM_DELAYED_CREATE,			// wParam: none, lParam: none
 	UWM_DEFERRED_UPDATE,		// wParam: none, lParam: none
+	UWM_SHOW_CHANGING,			// wParam: none, lParam: none
 };

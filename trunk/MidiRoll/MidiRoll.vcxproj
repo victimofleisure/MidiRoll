@@ -182,9 +182,11 @@
     <Text Include="ReadMe.txt" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AboutDlg.h" />
     <ClInclude Include="ArrayEx.h" />
     <ClInclude Include="ArrayExAlgoDef.h" />
     <ClInclude Include="BoundArray.h" />
+    <ClInclude Include="ChannelsBar.h" />
     <ClInclude Include="D2DImageWriter.h" />
     <ClInclude Include="Diatonic.h" />
     <ClInclude Include="DPoint.h" />
@@ -192,6 +194,7 @@
     <ClInclude Include="FrameSizeDef.h" />
     <ClInclude Include="Globals.h" />
     <ClInclude Include="HeptatonicDef.h" />
+    <ClInclude Include="MainDockBarDef.h" />
     <ClInclude Include="MainFrm.h" />
     <ClInclude Include="Midi.h" />
     <ClInclude Include="MidiCtrlrDef.h" />
@@ -200,6 +203,7 @@
     <ClInclude Include="MidiRollDoc.h" />
     <ClInclude Include="MidiRollView.h" />
     <ClInclude Include="ModeDef.h" />
+    <ClInclude Include="MyDockablePane.h" />
     <ClInclude Include="Note.h" />
     <ClInclude Include="PathStr.h" />
     <ClInclude Include="Persist.h" />
@@ -214,6 +218,8 @@
     <ClInclude Include="Scale.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="TracksBar.h" />
+    <ClInclude Include="Version.h" />
     <ClInclude Include="VersionInfo.h" />
     <ClInclude Include="Win32Console.h" />
     <ClInclude Include="WinAppCK.h" />
@@ -221,7 +227,9 @@
     <ClInclude Include="Wrapx64.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="AboutDlg.cpp" />
     <ClCompile Include="ArrayEx.cpp" />
+    <ClCompile Include="ChannelsBar.cpp" />
     <ClCompile Include="D2DImageWriter.cpp" />
     <ClCompile Include="Diatonic.cpp" />
     <ClCompile Include="DPoint.cpp" />
@@ -231,6 +239,7 @@
     <ClCompile Include="MidiRoll.cpp" />
     <ClCompile Include="MidiRollDoc.cpp" />
     <ClCompile Include="MidiRollView.cpp" />
+    <ClCompile Include="MyDockablePane.cpp" />
     <ClCompile Include="Note.cpp" />
     <ClCompile Include="PathStr.cpp" />
     <ClCompile Include="Persist.cpp" />
@@ -244,6 +253,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="TracksBar.cpp" />
     <ClCompile Include="VersionInfo.cpp" />
     <ClCompile Include="Win32Console.cpp" />
     <ClCompile Include="WinAppCK.cpp" />

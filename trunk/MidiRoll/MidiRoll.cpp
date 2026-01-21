@@ -22,6 +22,7 @@
 
 #include "MidiRollDoc.h"
 #include "MidiRollView.h"
+#include "AboutDlg.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -43,13 +44,14 @@ END_MESSAGE_MAP()
 
 CMidiRollApp::CMidiRollApp()
 {
+	m_bDeferShowOnFirstWindowPlacementLoad = true;	// eliminates startup flicker
 	m_bHiColorIcons = TRUE;
 
 	// TODO: replace application ID string below with unique ID string; recommended
 	// format for string is CompanyName.ProductName.SubProduct.VersionInformation
 	SetAppID(_T("MidiRoll.AppID.NoVersion"));
 
-	// TODO: add construction code here,
+	m_pDoc = NULL;
 	// Place all significant initialization in InitInstance
 }
 
@@ -124,12 +126,9 @@ BOOL CMidiRollApp::InitInstance()
 		return FALSE;
 	AddDocTemplate(pDocTemplate);
 
-
 	// Parse command line for standard shell commands, DDE, file open
 	CCommandLineInfo cmdInfo;
 	ParseCommandLine(cmdInfo);
-
-
 
 	// Dispatch commands specified on the command line.  Will return FALSE if
 	// app was launched with /RegServer, /Register, /Unregserver or /Unregister.
@@ -152,38 +151,6 @@ int CMidiRollApp::ExitInstance()
 
 // CMidiRollApp message handlers
 
-
-// CAboutDlg dialog used for App About
-
-class CAboutDlg : public CDialogEx
-{
-public:
-	CAboutDlg();
-
-// Dialog Data
-	enum { IDD = IDD_ABOUTBOX };
-
-protected:
-	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
-
-// Implementation
-protected:
-	DECLARE_MESSAGE_MAP()
-};
-
-CAboutDlg::CAboutDlg() : CDialogEx(CAboutDlg::IDD)
-{
-}
-
-void CAboutDlg::DoDataExchange(CDataExchange* pDX)
-{
-	CDialogEx::DoDataExchange(pDX);
-}
-
-BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
-END_MESSAGE_MAP()
-
-// App command to run the dialog
 void CMidiRollApp::OnAppAbout()
 {
 	CAboutDlg aboutDlg;
@@ -207,6 +174,13 @@ void CMidiRollApp::LoadCustomState()
 
 void CMidiRollApp::SaveCustomState()
 {
+}
+
+LRESULT	CMidiRollApp::OnTrackingHelp(WPARAM wParam, LPARAM lParam)
+{
+	if (GetMainFrame()->IsTracking())
+		return GetMainFrame()->SendMessage(WM_COMMANDHELP, wParam, lParam);
+	return FALSE;
 }
 
 // CMidiRollApp message handlers

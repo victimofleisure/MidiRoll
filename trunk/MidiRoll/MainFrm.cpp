@@ -8,7 +8,8 @@
 		revision history:
 		rev		date	comments
 		00		23jul25	initial version
- 
+		01		20jan26	add channels and tracks panes and combos
+
 */
 
 // MainFrm.cpp : implementation of the CMainFrame class
@@ -56,6 +57,11 @@ enum {	// application looks; alpha order to match corresponding resource IDs
 
 #define ID_VIEW_APPLOOK_FIRST ID_VIEW_APPLOOK_OFF_2003
 #define ID_VIEW_APPLOOK_LAST ID_VIEW_APPLOOK_WIN_XP
+
+const UINT CMainFrame::m_arrDockingBarNameID[DOCKING_BARS] = {
+	#define MAINDOCKBARDEF(name, width, height, style) IDS_BAR_##name,
+	#include "MainDockBarDef.h"	// generate docking bar names
+};
 
 // CMainFrame construction/destruction
 
@@ -113,13 +119,18 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_wndStatusBar.SetPaneText(1, _T(""));
 	m_wndStatusBar.SetPaneText(2, _T(""));
 
-	// TODO: Delete these five lines if you don't want the toolbar and menubar to be dockable
 	m_wndMenuBar.EnableDocking(CBRS_ALIGN_ANY);
 	m_wndToolBar.EnableDocking(CBRS_ALIGN_ANY);
 	EnableDocking(CBRS_ALIGN_ANY);
 	DockPane(&m_wndMenuBar);
 	DockPane(&m_wndToolBar);
 
+	// create docking windows
+	if (!CreateDockingWindows())
+	{
+		TRACE0("Failed to create docking windows\n");
+		return -1;
+	}
 
 	// enable Visual Studio 2005 style docking window behavior
 	CDockingManager::SetDockingMode(DT_SMART);
@@ -129,7 +140,7 @@ int CMainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	OnApplicationLook(theApp.m_nAppLook + ID_VIEW_APPLOOK_FIRST);
 
 	// Enable toolbar and docking window menu replacement
-//	EnablePaneMenu(TRUE, ID_VIEW_CUSTOMIZE, strCustomize, ID_VIEW_TOOLBAR);
+	EnablePaneMenu(TRUE, ID_VIEW_CUSTOMIZE, strCustomize, ID_VIEW_TOOLBAR);
 
 	// enable quick (Alt+drag) toolbar customization
 	CMFCToolBar::EnableQuickCustomization();
@@ -162,6 +173,136 @@ void CMainFrame::Dump(CDumpContext& dc) const
 }
 #endif //_DEBUG
 
+BOOL CMainFrame::CreateDockingWindows()
+{
+	CString sTitle;
+	DWORD	dwBaseStyle = WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | CBRS_FLOAT_MULTI;
+	#define MAINDOCKBARDEF(name, width, height, style) \
+		sTitle.LoadString(IDS_BAR_##name); \
+		if (!m_wnd##name##Bar.Create(sTitle, this, CRect(0, 0, width, height), TRUE, ID_BAR_##name, style)) {	\
+			TRACE("Failed to create %s bar\n", #name);	\
+			return FALSE; \
+		} \
+		m_wnd##name##Bar.EnableDocking(CBRS_ALIGN_ANY); \
+		DockPane(&m_wnd##name##Bar);
+	#include "MainDockBarDef.h"	// generate code to create docking windows
+//	SetDockingWindowIcons(theApp.m_bHiColorIcons);
+	return TRUE;
+}
+
+void CMainFrame::OnUpdate(CView* pSender, LPARAM lHint, CObject* pHint)
+{
+//	printf("CMainFrame::OnUpdate pSender=%Ix lHint=%Id pHint=%Ix\n", pSender, lHint, pHint);
+	switch (lHint) {
+	case CMidiRollDoc::HINT_NONE:
+		PopulateTracksCombo();
+		PopulateChannelsCombo();
+		break;
+	case CMidiRollDoc::HINT_TRACK_SEL:
+		UpdateTracksCombo();
+		break;
+	case CMidiRollDoc::HINT_CHANNEL_SEL:
+		UpdateChannelsCombo();
+		break;
+	}
+	// relay update to visible bars
+	if (m_wndTracksBar.FastIsVisible())
+		m_wndTracksBar.OnUpdate(pSender, lHint, pHint);
+	if (m_wndChannelsBar.FastIsVisible())
+		m_wndChannelsBar.OnUpdate(pSender, lHint, pHint);
+}
+
+CMFCToolBarComboBoxButton* CMainFrame::GetToolbarCombo(int nID)
+{
+	int iBtn = m_wndToolBar.CommandToIndex(nID);
+    if (iBtn < 0)
+		return NULL;
+    return DYNAMIC_DOWNCAST(CMFCToolBarComboBoxButton, m_wndToolBar.GetButton(iBtn));
+}
+
+bool CMainFrame::PopulateTracksCombo()
+{
+	CMFCToolBarComboBoxButton* pCombo = GetToolbarCombo(ID_TRACKS_COMBO);
+	if (pCombo == NULL)
+		return false;
+	CMidiRollDoc	*pDoc = theApp.m_pDoc;
+	pCombo->RemoveAllItems();
+	int	nTracks = pDoc->m_arrTrackName.GetSize();
+	if (nTracks) {
+		pCombo->AddItem(LDS(IDS_ALL));
+		for (int iTrack = 0; iTrack < nTracks; iTrack++) {
+			pCombo->AddItem(pDoc->m_arrTrackName[iTrack]);
+		}
+	}
+	UpdateTracksCombo();
+	return true;
+}
+
+bool CMainFrame::UpdateTracksCombo()
+{
+	CMFCToolBarComboBoxButton* pCombo = GetToolbarCombo(ID_TRACKS_COMBO);
+	if (pCombo == NULL)
+		return false;
+	CMidiRollDoc	*pDoc = theApp.m_pDoc;
+	CIntArrayEx	arrSel;
+	pDoc->GetSelectedTracks(arrSel);
+	int	iItem = GetComboItem(pCombo, arrSel);
+	pCombo->SelectItem(iItem);
+	m_wndToolBar.Invalidate();
+	return true;
+}
+
+bool CMainFrame::PopulateChannelsCombo()
+{
+	CMFCToolBarComboBoxButton* pCombo = GetToolbarCombo(ID_CHANNELS_COMBO);
+	if (pCombo == NULL)
+		return false;
+	CMidiRollDoc	*pDoc = theApp.m_pDoc;
+	CIntArrayEx	arrUsed;
+	pDoc->GetUsedChannels(arrUsed);
+	pCombo->RemoveAllItems();
+	int	nUsedChans = arrUsed.GetSize();
+	if (nUsedChans) {
+		pCombo->AddItem(LDS(IDS_ALL));
+		CString	sChan;
+		for (int iUsed = 0; iUsed < nUsedChans; iUsed++) {
+			int	iChan = arrUsed[iUsed];
+			sChan.Format(_T("%d"), iChan + 1);
+			pCombo->AddItem(sChan);
+		}
+	}
+	UpdateChannelsCombo();
+	return true;
+}
+
+bool CMainFrame::UpdateChannelsCombo()
+{
+	CMFCToolBarComboBoxButton* pCombo = GetToolbarCombo(ID_CHANNELS_COMBO);
+	if (pCombo == NULL)
+		return false;
+	CMidiRollDoc	*pDoc = theApp.m_pDoc;
+	CIntArrayEx	arrSel;
+	pDoc->GetSelectedChannels(arrSel);
+	int	iItem = GetComboItem(pCombo, arrSel);
+	pCombo->SelectItem(iItem);
+	m_wndToolBar.Invalidate();
+	return true;
+}
+
+int CMainFrame::GetComboItem(CMFCToolBarComboBoxButton* pCombo, const CIntArrayEx& arrSel)
+{
+	int	nSels = arrSel.GetSize();
+	int	iItem;
+	if (nSels == 1) {	// if single item selected
+		iItem = arrSel[0] + 1;	// skip "all" item
+	} else if (nSels == pCombo->GetCount() - 1) {	// if all items selected
+		iItem = 0;	// select "all" item
+	} else {	// nothing selected
+		iItem = -1;
+	}
+	return iItem;
+}
+
 // CMainFrame message map
 
 BEGIN_MESSAGE_MAP(CMainFrame, CFrameWndEx)
@@ -173,6 +314,11 @@ BEGIN_MESSAGE_MAP(CMainFrame, CFrameWndEx)
 	ON_MESSAGE(UWM_DELAYED_CREATE, OnDelayedCreate)
 	ON_NOTIFY(CRulerCtrl::RN_CLICKED, CMidiRollView::RULER_ID, OnRulerClicked)
 	ON_WM_MOUSEWHEEL()
+	ON_REGISTERED_MESSAGE(AFX_WM_RESETTOOLBAR, OnToolbarReset)
+	ON_COMMAND(ID_TRACKS_COMBO, OnTracksCombo)
+	ON_COMMAND(ID_CHANNELS_COMBO, OnTracksCombo)
+	ON_CBN_SELENDOK(ID_TRACKS_COMBO, OnSelTracks)
+	ON_CBN_SELENDOK(ID_CHANNELS_COMBO, OnSelChannels)
 END_MESSAGE_MAP()
 
 // CMainFrame message handlers
@@ -329,4 +475,69 @@ BOOL CMainFrame::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
 		pView->OnRulerWheel(nFlags, zDelta, pt);
 	}
 	return CFrameWndEx::OnMouseWheel(nFlags, zDelta, pt);
+}
+
+#define MAINDOCKBARDEF(name, width, height, style) \
+	void CMainFrame::OnViewBar##name() \
+	{ \
+		m_wnd##name##Bar.ToggleShowPane(); \
+	} \
+	void CMainFrame::OnUpdateViewBar##name(CCmdUI *pCmdUI) \
+	{ \
+		pCmdUI->SetCheck(m_wnd##name##Bar.IsVisible()); \
+	}
+#include "MainDockBarDef.h"	// generate docking bar message handlers
+
+LRESULT CMainFrame::OnToolbarReset(WPARAM wParam, LPARAM lParam)
+{
+	UINT uiToolBarId = (UINT) wParam;
+	if (uiToolBarId == m_wndToolBar.GetResourceID()) {
+		const int	arrComboID[2] = {ID_TRACKS_COMBO, ID_CHANNELS_COMBO};
+		const int	arrComboSize[2] = {0, 75};
+		for (int iCombo = 0; iCombo < _countof(arrComboID); iCombo++) {
+			int	nID = arrComboID[iCombo];
+			int	iBtn = m_wndToolBar.CommandToIndex(nID);
+			if (iBtn >= 0) {
+				CMFCToolBarComboBoxButton comboBtn(nID, -1, CBS_DROPDOWNLIST, arrComboSize[iCombo]);
+				m_wndToolBar.ReplaceButton(nID, comboBtn);
+			}
+		}
+    }
+	return 0;
+}
+
+void CMainFrame::OnSelTracks()
+{
+	CMFCToolBarComboBoxButton* pCombo = GetToolbarCombo(ID_TRACKS_COMBO);
+	if (pCombo != NULL) {
+		int	iCurSel = pCombo->GetCurSel();
+		if (iCurSel >= 0) {
+			CMidiRollDoc	*pDoc = theApp.m_pDoc;
+			if (iCurSel) {
+				pDoc->SelectTrack(iCurSel - 1);	// account for all item
+			} else {
+				pDoc->SelectAllTracks();
+			}
+		}
+	}
+}
+
+void CMainFrame::OnSelChannels()
+{
+	CMFCToolBarComboBoxButton* pCombo = GetToolbarCombo(ID_CHANNELS_COMBO);
+	if (pCombo != NULL) {
+		int	iCurSel = pCombo->GetCurSel();
+		if (iCurSel >= 0) {
+			CMidiRollDoc	*pDoc = theApp.m_pDoc;
+			if (iCurSel) {
+				pDoc->SelectChannel(iCurSel - 1);	// account for all item
+			} else {
+				pDoc->SelectAllChannels();
+			}
+		}
+	}
+}
+
+void CMainFrame::OnTracksCombo()
+{
 }

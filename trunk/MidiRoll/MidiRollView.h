@@ -99,9 +99,10 @@ protected:
 	CD2DSizeF	m_szDPI;	// DPI of each axis
 	CD2DSizeF	m_szView;	// view size in DIPs
 	int		m_nBeatQuant;	// beat quantization in ticks
-	bool	m_bUsingD2D;
+	bool	m_bUsingD2D;	// true if using Direct2D
 	bool	m_bIsPlaying;	// true if playing
 	bool	m_bIsExporting;	// true if exporting
+	bool	m_bIsRounded;	// true if drawing notes with rounded corners
 	BYTE	m_nDeferredUpdate;	// non-zero if update pending
 	ULONGLONG	m_nPlayStartTime;	// in milliseconds
 	double	m_fPlayNowTime;	// in seconds
@@ -124,8 +125,6 @@ protected:
 	COLOR_SCHEME	m_colorScheme;	// color scheme
 	float	m_fAlpha;	// normalized alpha
 	int		m_iAlphaPreset;	// index of alpha preset
-	int		m_nMinVelo;
-	int		m_nMaxVelo;
 
 // Helpers
 	bool	ExportVideo(LPCTSTR pszFolderPath, CSize szFrame, double fFrameRate, int nDurationFrames);
@@ -159,6 +158,7 @@ protected:
 	virtual BOOL OnScroll(UINT nScrollCode, UINT nPos, BOOL bDoScroll);
 	virtual BOOL OnScrollBy(CSize sizeScroll, BOOL bDoScroll);
 	virtual void CalcWindowRect(LPRECT lpClientRect, UINT nAdjustType = adjustBorder);
+	virtual void OnUpdate(CView* pSender, LPARAM lHint = 0, CObject* pHint = NULL);
 
 // Generated message map functions
 protected:
@@ -190,6 +190,8 @@ protected:
 	afx_msg void OnAlphaPreset(UINT nID);
 	afx_msg void OnUpdateAlphaPreset(CCmdUI *pCmdUI);
 	afx_msg void OnRewind();
+	afx_msg void OnRounded();
+	afx_msg void OnUpdateRounded(CCmdUI *pCmdUI);
 };
 
 #ifndef _DEBUG  // debug version in MidiRollView.cpp
