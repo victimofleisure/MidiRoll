@@ -81,8 +81,8 @@ protected:
 		AXIS_MASK_BOTH = 0x03,
 	};
 	enum {	// color schemes
-		CS_DARK,
 		CS_LIGHT,
+		CS_DARK,
 		COLOR_SCHEMES
 	};
 	enum {	// alpha presets

@@ -54,15 +54,15 @@ IMPLEMENT_DYNCREATE(CMidiRollView, CScrollView)
 #define DTF(x) static_cast<float>(x)
 
 const CMidiRollView::COLOR_SCHEME CMidiRollView::m_arrColorScheme[COLOR_SCHEMES] = {
-	{	// CS_DARK
-		D2D1::ColorF(0.1f, 0.1f, 0.1f),
-		D2D1::ColorF(0, 0, 0),
-		D2D1::ColorF(1, 1, 1)
-	},
 	{	// CS_LIGHT
 		D2D1::ColorF(1, 1, 1),
 		D2D1::ColorF(0.9f, 0.9f, 0.9f),
 		D2D1::ColorF(0, 0, 0)
+	},
+	{	// CS_DARK
+		D2D1::ColorF(0.1f, 0.1f, 0.1f),
+		D2D1::ColorF(0, 0, 0),
+		D2D1::ColorF(1, 1, 1)
 	},
 };
 
